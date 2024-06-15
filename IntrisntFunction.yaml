@@ -1,0 +1,45 @@
+Fn::Ref !Ref
+Fn::GetAtt ==>attribute of any resurce you create
+Fn::FindInMap ==> !FindInMap[RegionMap, !Ref "AWS::Region", HVM64] eg [MapName, Key1, Key2]
+Fn::ImprtValue
+Fn::Join ==> !join[delemeter, [commma-delimated list of value]] eg !join[":",[a, b, c]]
+Fn::Sub
+ConditionFunction(Fn::If, Fn::Not, Fn::Equal, etc)
+Fn::Base64
+Fn::Cidr==> !Cidr [IpBlock, count, cidrBits] !Cidr ['192.168.0.0/24, 6, 5']
+Fn::GetAzs
+Fn::Select ==> !Select [Index, listofObject] eg !Select ["1",["apple", "graps", "mango"]]
+==> AvaliabilotyZone: !Select
+     - 0
+     - Fn::GetAzs: Ref "AWS::Region"
+Fn::Split  eg !Split[delimater, sourceString]
+
+#Resource Import In Terraform
+Resources:
+ ImportedBucket:
+  Type: AWS::s3::Bucket
+  DeletionPolicy: Retain
+
+ ImportedInstance:
+  Type: AWS::EC2::Instance
+  DeletionPolicy: delemeter
+  Properties:
+    ImageId: ami-3272389
+    InstanceType: t2.micro
+
+---
+#multople resources in AWS Cloudformation
+Transform: count
+Resource:
+ Bucket:
+   Type: AWS::s3::Bucket
+   Count: 3
+   Properties:
+     Tags:
+       - Ket: TestKey
+         Value: My Bucket %d
+
+
+
+
+ 

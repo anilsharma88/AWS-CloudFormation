@@ -1,0 +1,5 @@
+Cloud Init Script ==> User data does't provide any signal if command are executed sucessful or not
+
+
+
+cnf-hup ==> Run as demonset, allow you to update the configuration(EC2) by editing the AWS::CloudFormation::Init: metadata and updating your AWS::StackName
