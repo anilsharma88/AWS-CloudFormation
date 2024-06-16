@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Web server stack template for
+  AWS CloudFormation Step by Step: Intermediate to Advanced course.
+
+Parameters:
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI of the web server instance
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: The public subnet that the instance will be launched into
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id 
+    Description: The security group that will be attached to the instance
+
+Resources:
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      SecurityGroupIds: 
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref SubnetId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer'
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash -xe
+          yum update -y
+          amazon-linux-extras install -y nginx1
+          service nginx start
+
+Outputs:
+  WebServerPublicDNS:
+    Description: Public DNS name of the web server instance
+    Value: !GetAtt WebServerInstance.PublicDnsName
