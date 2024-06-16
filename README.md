@@ -10,6 +10,7 @@
 - Transform
 - Resources
 - Outputs
+    - cnf helper script 
 # Format Version
 ```
 AWSTemplateFormatVersion: 2010-09-09
@@ -300,5 +301,38 @@ Metadata:
       CloudFrontHostedZoneId:
         default: CloudFront Hosted Zone ID
 ```
+# CloudFormation Bootstrap UserData.
+- Using user data you can install package in ec2 instance bootstrep
+```
+Resources:
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      SecurityGroupIds: 
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref SubnetId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer'
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash -xe
+          yum update -y
+          amazon-linux-extras install -y nginx1
+          service nginx start
+```
+# Cloud Init Script 
+- User data does't provide any signal if commands are executed sucessfully or not. We use init script 
+  - ```
+  UserData:
+  Fn::Base64:
+    !Sub |
+      #!/bin/bash -xe
+      yum update -y aws-cfn-bootstrap
+      /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfig --configsets wordpress_install --region ${AWS::Region}
+      /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerGroup --region ${AWS::Region}
+  ```
 # Nested Template 
 - Reusable workflow
