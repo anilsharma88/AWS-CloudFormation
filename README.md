@@ -329,9 +329,10 @@ Resources:
 - their are 4 pyhon script that come with amzone AMI, you can also use yum to install it non Linux system
   - ***cfn-init***: Used to retrive and interpret the resource metadata, installing packages, creating files and starting services.
   - ***cfn-signal***: A simple wrapper to signal with a CreationPolicy or WaitCondition, enabling you to synchronize other srsources in the stack with the application being ready.
-  -- ***cfn-get-metadata***: A wrapper script making it easy to retrive either all metadata defined for a resource ot path to a specific key or subtee of the resource metadata.
+  - ***cfn-get-metadata***: A wrapper script making it easy to retrive either all metadata defined for a resource ot path to a specific key or subtee of the resource metadata.
   - ***cnf-hup***: Run as demonset to check for updates to the metadata and execute custom hooks when the changes are detected, allow you to update the configuration(EC2) by editing the AWS::CloudFormation::Init: metadata and updating your AWS::StackName
-  - ```
+  
+  ```
   UserData:
   Fn::Base64:
     !Sub |
