@@ -325,6 +325,12 @@ Resources:
 ```
 # Cloud Init Script 
 - User data does't provide any signal if commands are executed sucessfully or not. We use init script 
+- size is also issue with user data script
+- their are 4 pyhon script that come with amzone AMI, you can also use yum to install it non Linux system
+  - ***cfn-init***: Used to retrive and interpret the resource metadata, installing packages, creating files and starting services.
+  - ***cfn-signal***: A simple wrapper to signal with a CreationPolicy or WaitCondition, enabling you to synchronize other srsources in the stack with the application being ready.
+  -- ***cfn-get-metadata***: A wrapper script making it easy to retrive either all metadata defined for a resource ot path to a specific key or subtee of the resource metadata.
+  - ***cnf-hup***: Run as demonset to check for updates to the metadata and execute custom hooks when the changes are detected, allow you to update the configuration(EC2) by editing the AWS::CloudFormation::Init: metadata and updating your AWS::StackName
   - ```
   UserData:
   Fn::Base64:
@@ -334,5 +340,395 @@ Resources:
       /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource LaunchConfig --configsets wordpress_install --region ${AWS::Region}
       /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerGroup --region ${AWS::Region}
   ```
+ - **Metata Metadata Type: AWS::EC2::Instance** 
+
+
+ ```
+ Resources: 
+  MyInstance: 
+    Type: AWS::EC2::Instance
+    Metadata: 
+      AWS::CloudFormation::Init: 
+        config: 
+          packages: ==> used to install packages
+            :
+          groups: ==> used to create groups 
+            :
+          users: ==> used to create user
+            :
+          sources: ==> to download data fron source location
+            :
+          files: ==> to create file , or use remote file
+            :
+          commands: ==> to run the commands or custom screipt
+            :
+          services: ==> to start the services 
+            :
+    Properties: 
+      :
+
+ ```
+ - **ConfigSet:** By defaut ec2 metadata processing in following order
+      - packages
+      - groups 
+      - users
+      - sources
+      - files 
+      - commands
+      - services 
+    - if you require diferent order you can use of COnfigSet
+  ```
+  AWS::CloudFormation::Init: 
+  configSets:
+    InstallAllandRun: {==Key and then order }
+      - "config1"
+      - "config2"
+    ascending: 
+      - "config1"
+      - "config2"
+    descending: 
+      - "config2"
+      - "config1"
+  config1: 
+    commands: 
+      test: 
+        command: "echo \"$CFNTEST\" > test.txt"
+        env: 
+          CFNTEST: "I come from config1."
+        cwd: "~"
+  config2: 
+    commands: 
+      test: 
+        command: "echo \"$CFNTEST\" > test.txt"
+        env: 
+          CFNTEST: "I come from config2"
+        cwd: "~"
+  ```
+
+
+
+ - ***Creation Policy*** to wait 15M for execution of user data 
+ 
+ ```
+ Resources:
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              nginx: []
+          services:
+            sysvinit:
+              nginx:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/nginx/nginx.conf
+                sources:
+                  - /usr/share/nginx/html
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      SecurityGroupIds: 
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref SubnetId
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+
+          amazon-linux-extras enable nginx1
+
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        -
+          PolicyName: WebsiteBucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - 
+                Effect: Allow
+                Action:
+                  - 's3:Get*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref WebServerRole
+
+Outputs:
+  WebServerPublicDNS:
+    Description: Public DNS name of the web server instance
+    Value: !GetAtt WebServerInstance.PublicDnsName
+ ```
+***AWS::CloudFormation::Authentication:*** in metadata 
+```
+
+Resources:
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT10M
+    Metadata:
+      AWS::CloudFormation::Authentication:
+        WebsiteBucketCredentials:
+          type: S3
+          buckets:
+            - !Ref WebsiteBucket
+          roleName: !Ref WebServerRole
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              nginx: []
+          sources:
+            /usr/share/nginx/html: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${WebsiteBucket}/my-website.zip'
+          
+          # Necessary for Windows users!
+          commands:
+            01_set_source_permissions:
+              command: 'sudo chmod ugo+r /usr/share/nginx/html/index.html'
+          
+          services:
+            sysvinit:
+              nginx:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/nginx/nginx.conf
+                sources:
+                  - /usr/share/nginx/html     
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref ImageId
+      SecurityGroupIds: 
+        - !Ref WebServerSecurityGroup
+      SubnetId: !Ref SubnetId
+      IamInstanceProfile: !Ref InstanceProfile
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-WebServer'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install -y aws-cfn-bootstrap
+
+          amazon-linux-extras enable nginx1
+
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        -
+          PolicyName: WebsiteBucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - 
+                Effect: Allow
+                Action:
+                  - 's3:Get*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref WebServerRole
+
+Outputs:
+  WebServerPublicDNS:
+    Description: Public DNS name of the web server instance
+    Value: !GetAtt WebServerInstance.PublicDnsName
+```
+## Finally 
+```
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation Sample Template for CFN Init
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+
+Resources:
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80 and SSH access via port 22
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: !Ref SSHLocation
+
+  WebServerHost:
+    Type: AWS::EC2::Instance
+    Metadata:
+      Comment: Install a simple PHP application
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              httpd: []
+              php: []
+          groups:
+            apache: {}
+          users:
+            "apache":
+              groups:
+                - "apache"
+          sources:
+            "/home/ec2-user/aws-cli": "https://github.com/aws/aws-cli/tarball/master"
+          files:
+            "/tmp/cwlogs/apacheaccess.conf":
+              content: !Sub |
+                [general]
+                state_file= /var/awslogs/agent-state
+                [/var/log/httpd/access_log]
+                file = /var/log/httpd/access_log
+                log_group_name = ${AWS::StackName}
+                log_stream_name = {instance_id}/apache.log
+                datetime_format = %d/%b/%Y:%H:%M:%S
+              mode: '000400'
+              owner: apache
+              group: apache
+            "/var/www/html/index.php":
+              content: !Sub |
+                <?php
+                echo '<h1>AWS CloudFormation sample PHP application for ${AWS::StackName}</h1>';
+                ?>
+              mode: '000644'
+              owner: apache
+              group: apache
+            "/etc/cfn/cfn-hup.conf":
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.WebServerHost.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerHost --region ${AWS::Region}
+              mode: "000400"
+              owner: "root"
+              group: "root"
+          commands:
+            test:
+              command: "echo \"$MAGIC\" > test.txt"
+              env:
+                MAGIC: "I come from the environment!"
+              cwd: "~"
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+              sendmail:
+                enabled: 'false'
+                ensureRunning: 'false'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+    Properties:
+      ImageId: ami-a4c7edb2
+      KeyName:
+        Ref: KeyName
+      InstanceType: t2.micro
+      SecurityGroups:
+      - Ref: WebServerSecurityGroup
+      UserData:
+        "Fn::Base64":
+          !Sub |
+            #!/bin/bash -xe
+            # Get the latest CloudFormation package
+            yum update -y aws-cfn-bootstrap
+            # Start cfn-init
+            /opt/aws/bin/cfn-init -s ${AWS::StackId} -r WebServerHost --region ${AWS::Region} || error_exit 'Failed to run cfn-init'
+            # Start up the cfn-hup daemon to listen for changes to the EC2 instance metadata
+            /opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'
+            # All done so signal success
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource WebServerHost --region ${AWS::Region}
+
+Outputs:
+  InstanceId:
+    Description: The instance ID of the web server
+    Value:
+      Ref: WebServerHost
+  WebsiteURL:
+    Value:
+      !Sub 'http://${WebServerHost.PublicDnsName}'
+    Description: URL for newly created LAMP stack
+  PublicIP:
+    Description: Public IP address of the web server
+    Value:
+      !GetAtt WebServerHost.PublicIp
+
+```
 # Nested Template 
 - Reusable workflow
