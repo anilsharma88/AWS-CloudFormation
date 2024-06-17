@@ -731,5 +731,9 @@ Outputs:
       !GetAtt WebServerHost.PublicIp
 
 ```
+
+# Resource Policy Attribute 
+- Using UpdatePolicy attributes on EC2 auto scaling groups to perform rolling and replacing updates.
+- Defining DeletionPolicy attribure on supported resources to retain, delette, or back up the resource during resource deletions.
 # Nested Template 
 - Reusable workflow

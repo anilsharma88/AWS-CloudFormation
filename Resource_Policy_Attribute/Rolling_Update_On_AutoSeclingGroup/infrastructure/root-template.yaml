@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+
+Parameters:
+  WebServerImage:
+    Type: AWS::EC2::Image::Id
+    Description: AMI for the web server stack  
+
+  WebsiteBucket:
+    Type: String
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'network-template.yaml'
+
+  LoadBalancingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'load-balancing-template.yaml'
+      Parameters:
+        VpcId: !GetAtt NetworkStack.Outputs.VpcId
+        Subnets: !GetAtt NetworkStack.Outputs.PublicSubnets
+        LoadBalancerSecurityGroup: !GetAtt NetworkStack.Outputs.LoadBalancerSecurityGroup
+  
+  AutoScalingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'auto-scaling-template.yaml'
+      Parameters:
+        ImageId: !Ref WebServerImage
+        WebServerSecurityGroup: !GetAtt NetworkStack.Outputs.WebServerSecurityGroup
+        Subnets: !GetAtt NetworkStack.Outputs.PublicSubnets
+        WebsiteBucket: !Ref WebsiteBucket
+        TargetGroupARN: !GetAtt LoadBalancingStack.Outputs.TargetGroupARN
+
+Outputs:
+  WebsiteDNS:
+    Description: DNS name of the website
+    Value: !GetAtt LoadBalancingStack.Outputs.LoadBalancerDNSName

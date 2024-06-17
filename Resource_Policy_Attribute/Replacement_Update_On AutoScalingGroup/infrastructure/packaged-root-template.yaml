@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+Parameters:
+  WebServerImage:
+    Type: AWS::EC2::Image::Id
+    Description: AMI for the web server stack
+  WebsiteBucket:
+    Type: String
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/my-cf-templates-bucket/60689db1c3f125c106cc59a41010a77d.template
+  LoadBalancingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/my-cf-templates-bucket/a8c8e0d96e4db0fc1fc05aad1fcff2ee.template
+      Parameters:
+        VpcId:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.VpcId
+        Subnets:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.PublicSubnets
+        LoadBalancerSecurityGroup:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.LoadBalancerSecurityGroup
+  AutoScalingStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/my-cf-templates-bucket/e1650cef8e9c16eccbdfa1d8dd0cbc89.template
+      Parameters:
+        ImageId:
+          Ref: WebServerImage
+        WebServerSecurityGroup:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.WebServerSecurityGroup
+        Subnets:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.PublicSubnets
+        WebsiteBucket:
+          Ref: WebsiteBucket
+        TargetGroupARN:
+          Fn::GetAtt:
+          - LoadBalancingStack
+          - Outputs.TargetGroupARN
+Outputs:
+  WebsiteDNS:
+    Description: DNS name of the website
+    Value:
+      Fn::GetAtt:
+      - LoadBalancingStack
+      - Outputs.LoadBalancerDNSName

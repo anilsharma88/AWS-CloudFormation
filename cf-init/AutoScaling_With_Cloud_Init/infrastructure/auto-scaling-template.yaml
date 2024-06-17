@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Auto scaling stack template for
+  AWS CloudFormation Step by Step: Intermediate to Advanced course.
+
+Parameters:
+  ImageId:
+    Type: AWS::EC2::Image::Id
+    Description: AMI of the web server instance
+
+  Subnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: The subnets that the auto scaling group will span
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id 
+    Description: The security group that will be attached to the instances
+
+  WebsiteBucket:
+    Type: String
+
+  TargetGroupARN:
+    Type: String
+    Description: The ARN of the load balancer target group the instances will be registered to
+
+Resources:
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - 
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        -
+          PolicyName: WebsiteBucketAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - 
+                Effect: Allow
+                Action:
+                  - 's3:Get*'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref WebServerRole
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Authentication:
+        WebsiteBucketCredentials:
+          type: S3
+          buckets:
+            - !Ref WebsiteBucket
+          roleName: !Ref WebServerRole
+      AWS::CloudFormation::Init:
+        configSets:
+          myConfigSet:
+            - cfnHupConfig
+            - extrasRepoConfig
+            - nginxConfig
+        cfnHupConfig:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              group: root
+              user: root
+              mode: '000400'
+              content: !Sub |
+                [main]
+                stack=${AWS::StackName}
+                region=${AWS::Region}
+                interval=3
+                verbose=true
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              group: root
+              user: root
+              mode: '000400'
+              content: !Sub |
+                [cfn-auto-reloader]
+                triggers=post.add,post.update
+                path=Resources.LaunchTemplate.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --configsets myConfigSet --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+                runas=root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf              
+        extrasRepoConfig:
+          commands:
+            01_enable_nginx: 
+              command: 'amazon-linux-extras enable nginx1'
+        nginxConfig:
+          packages:
+            yum:
+              nginx: []
+          sources:
+            /usr/share/nginx/html: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${WebsiteBucket}/my-website-v2.zip'
+
+          # Necessary for Windows users!
+          commands:
+            01_set_source_permissions:
+              command: 'sudo chmod ugo+r /usr/share/nginx/html/index.html'
+
+          services:
+            sysvinit:
+              nginx:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/nginx/nginx.conf
+                sources:
+                  - /usr/share/nginx/html
+    Properties:
+      LaunchTemplateData:
+        InstanceType: t2.micro
+        ImageId: !Ref ImageId
+        SecurityGroupIds: 
+          - !Ref WebServerSecurityGroup
+        IamInstanceProfile: 
+          Name: !Ref InstanceProfile
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            yum update -y
+            yum install -y aws-cfn-bootstrap
+
+            /opt/aws/bin/cfn-init -v --configsets myConfigSet --stack ${AWS::StackName} --resource LaunchTemplate --region ${AWS::Region}
+
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource AutoScalingGroup --region ${AWS::Region}
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 2
+        Timeout: PT10M
+    Properties:
+      LaunchTemplate: 
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier: !Ref Subnets
+      MinSize: 2
+      MaxSize: 4
+      DesiredCapacity: 2
+      HealthCheckType: ELB
+      TargetGroupARNs:
+        - !Ref TargetGroupARN
+      HealthCheckGracePeriod: 300
+
+  ScalingPoliciesStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'scaling-policies-template.yaml'
+      Parameters:
+        AutoScalingGroup: !Ref AutoScalingGroup

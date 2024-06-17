@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Sample template for the import examples of
+  AWS CloudFormation Step by Step course series.
+
+Parameters:
+  SQSDelaySeconds:
+    Type: Number
+    Default: 0
+
+Resources:
+  SQSQueue:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Retain
+    Properties:
+      DelaySeconds: !Ref SQSDelaySeconds
+      VisibilityTimeout: 30 # seconds
+
+  S3Bucket:
+    DeletionPolicy: Retain
+    Type: AWS::S3::Bucket
+
+      

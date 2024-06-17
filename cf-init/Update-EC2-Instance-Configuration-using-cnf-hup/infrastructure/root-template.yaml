@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+
+Parameters:
+  WebServerImage:
+    Type: AWS::EC2::Image::Id
+    Description: AMI for the web server stack  
+
+  WebsiteBucket:
+    Type: String
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'network-template.yaml'
+  
+  WebServerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: 'web-server-template.yaml'
+      Parameters:
+        ImageId: !Ref WebServerImage
+        WebServerSecurityGroup: !GetAtt NetworkStack.Outputs.WebServerSecurityGroup
+        SubnetId: !Select
+          - 0
+          - Fn::Split: [ ',', !GetAtt NetworkStack.Outputs.PublicSubnets ]
+        WebsiteBucket: !Ref WebsiteBucket

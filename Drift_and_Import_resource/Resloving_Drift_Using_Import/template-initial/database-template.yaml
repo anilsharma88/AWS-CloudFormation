@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Database stack template for the drift detection examples of
+  AWS CloudFormation Step by Step course series.
+
+Resources:
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceClass: db.t2.micro
+      Engine: mysql
+      MultiAZ: false
+      StorageType: gp2
+      AllocatedStorage: 20
+      MasterUsername: dbadmin
+      MasterUserPassword: dbpassword
+
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Your Topic
+
+      

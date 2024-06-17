@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Root stack template for AWS CloudFormation Step by Step series.
+Parameters:
+  DbClass:
+    Type: String
+    AllowedValues:
+    - db.t4g.micro
+    - db.t3.micro
+    Description: RDS DB instance class for the DB storage
+    Default: db.t4g.micro
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/my-cf-templates-bucket/9a461c3aecae0b87f18ee7e5385fed33.template
+  StorageStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/my-cf-templates-bucket/a5bf39c2485e69e01005e8cc1d99c856.template
+      Parameters:
+        DbClass:
+          Ref: DbClass
+        DbSecurityGroup:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.DbSecurityGroup
+        DbSubnets:
+          Fn::GetAtt:
+          - NetworkStack
+          - Outputs.PrivateSubnets
