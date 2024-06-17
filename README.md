@@ -735,5 +735,45 @@ Outputs:
 # Resource Policy Attribute 
 - Using UpdatePolicy attributes on EC2 auto scaling groups to perform rolling and replacing updates.
 - Defining DeletionPolicy attribure on supported resources to retain, delette, or back up the resource during resource deletions.
+# Stack Drifting and [Import Resource](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resource-import-supported-resources.html)
+- Drift: Detecting unmanged changes to stack resources
+- resloving drifts by removing resouces from the stack(Put comment for resource #) and importing them back, using CloudFormation's resource import feature.
+- Resloving drifts with resources that lost connection with the stack.
+- Creating a stack by importing existing,umanged resources.
+   - resource should not be managed with other stack
+   - A template with impoted resources wil be needed during the import.
+   - All resources imported should have the DeletionPolicy attributed set with any vaild value
+
+
+# Stack Policy 
+- Stack policies allow you to precent updates, replacements, and deletions of your stack resources during stack updates.
+- By default, no stack policy is defined on a stack, and all resource updates are allowed.
+- You can set a stack policy during the stack creation or update it later using AWS cli.
+- They are JSON format with properties similar to the IAM policies.
+- But they do not provide access control like IAM or other resource policy
+- You use stack policy to prevent unintentional updates on your stack resources.
+- Preventing updates of specific resource
+- preventing a particular type of update
+- Defining conditions in a stack policy and preventing updates of specific resource types.
+
+# Custom Resources & Wait Conditions
+-  Custom resource types to add custom logic to your templates and stacks
+- You can use them to provision AWS resources not supported by CloudFormation or resources outside AWS.
+- You can perform any logic . eg you can search for an soecific AMI and return it.
+   - Custiom Resource Provider
+     - AWS Lambda
+     - Amazon SNS topic
+- The operation fails if cloudformation does not receive a response within one hour.
+If the custom resource provider returns a differnet physical resource ID during a update, CloudFormation regards it as replacement. Then, it also sends a delete request for the old resource during the update cleanup process.
+
+
+
+
+
+
+
+# SAM (AWS Serless Application Module)
+
+
 # Nested Template 
 - Reusable workflow
